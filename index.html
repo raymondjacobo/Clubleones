@@ -2118,20 +2118,28 @@ function waMinuta(sesionId){
 // ════════════════════════════════════════════════════════════════
 
 function semsVigentes(){
-  var hoy = new Date();
-  var y   = hoy.getFullYear();
-  var m   = hoy.getMonth();
-  if(m >= 6){
-    return [
-      {id:(y-1)+'-S2', lbl:'2do Sem '+(y-1)+' (Ene-Jun)', campo:'cuotaS2', vencido:true},
-      {id:y+'-S1',     lbl:'1er Sem '+y+' (Jul-Dic)',     campo:'cuotaS1', vencido:false}
-    ];
+  // Basarse en la mesa activa para calcular semestres correctamente
+  var mesa = getActiveMesa();
+  var hoy  = new Date();
+  var startY, endY;
+  if(mesa && mesa.fechaInicio){
+    var fi = new Date(mesa.fechaInicio+'T12:00:00');
+    startY = fi.getFullYear(); // Año de inicio de la mesa (ej. 2026)
+    endY   = startY + 1;      // Año de fin (ej. 2027)
   } else {
-    return [
-      {id:(y-1)+'-S1', lbl:'1er Sem '+(y-1)+' (Jul-Dic)', campo:'cuotaS1', vencido:true},
-      {id:y+'-S2',     lbl:'2do Sem '+y+' (Ene-Jun)',      campo:'cuotaS2', vencido:false}
-    ];
+    // Sin mesa activa: fallback al año actual
+    var m = hoy.getMonth();
+    startY = m >= 6 ? hoy.getFullYear() : hoy.getFullYear() - 1;
+    endY   = startY + 1;
   }
+  // S1 = Jul-Dic del año de inicio de mesa
+  // S2 = Ene-Jun del año siguiente
+  var s1Vencido = hoy >= new Date(endY+'-01-01'); // S1 vencido si ya pasó dic del startY
+  var s2Vencido = hoy >= new Date(endY+'-07-01'); // S2 vencido si ya pasó jun del endY
+  return [
+    {id:startY+'-S1', lbl:'1er Sem '+startY+' (Jul-Dic '+startY+')', campo:'cuotaS1', vencido:s1Vencido},
+    {id:startY+'-S2', lbl:'2do Sem '+startY+' (Ene-Jun '+endY+')',   campo:'cuotaS2', vencido:s2Vencido}
+  ];
 }
 
 // Obtener cuota de un socio para un semestre específico
@@ -2302,7 +2310,10 @@ function savePago(){
 function openHistPago(socioId){
   var so   = S.data.socios.find(function(s){return s.id===socioId;});
   if(!so) return;
-  var hist = [...S.data.pagos.filter(function(p){return String(p.socioId)===String(socioId);})]
+  var _amidH=getActiveMesaId();
+  var hist = [...S.data.pagos.filter(function(p){
+    return String(p.socioId)===String(socioId)&&(!_amidH||String(p.mesaDirectivaId)===String(_amidH));
+  })]
              .sort(function(a,b){return b.mes.localeCompare(a.mes);});
   var total= hist.reduce(function(s,p){return s+Number(p.monto);},0);
   S.modal  = {type:'hist-pago'};
@@ -3399,12 +3410,15 @@ function mesaPeriodoCorto(m){
 // ── Semestres Lions (S1=Jul-Dic, S2=Ene-Jun) ─────────────────────
 function semActual(){
   var d=new Date(), y=d.getFullYear(), m=d.getMonth();
-  return m>=6 ? y+'-S1' : y+'-S2';
+  // S1 = Jul-Dic del año Y
+  // S2 = Ene-Jun del año Y, pero pertenece al ciclo del año anterior (Y-1)
+  return m>=6 ? y+'-S1' : (y-1)+'-S2';
 }
 function semLabel(semId){
   var p=(semId||'').split('-');
-  if(p[1]==='S1') return '1er Semestre '+p[0]+' (Jul-Dic)';
-  if(p[1]==='S2') return '2do Semestre '+p[0]+' (Ene-Jun)';
+  var y=parseInt(p[0])||0;
+  if(p[1]==='S1') return '1er Sem '+y+' (Jul-Dic)';
+  if(p[1]==='S2') return '2do Sem '+y+' (Ene '+y+'-Jun '+(y+1)+')';
   return semId;
 }
 
