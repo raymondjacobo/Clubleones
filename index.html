@@ -3342,7 +3342,15 @@ function reporteSesion(sesionId){
   if(min&&min.acuerdos&&min.acuerdos.length){tabAcuerdos='<table><thead><tr><th>Descripción</th><th>Responsable</th><th>Fecha</th><th>Estatus</th></tr></thead><tbody>';min.acuerdos.forEach(function(a){tabAcuerdos+='<tr><td>'+escH(a.descripcion)+'</td><td style="color:#003DA5;font-weight:600">'+escH(nameById(a.responsable))+'</td><td>'+(a.fechaLimite?fmtD(a.fechaLimite):'—')+'</td><td>'+estatusBadge(a.estatus)+'</td></tr>';});tabAcuerdos+='</tbody></table>';}
   var tabCom='<p style="color:#999;font-style:italic;font-size:.82rem">Sin comisiones.</p>';
   if(min&&min.comisiones&&min.comisiones.length){tabCom='<table><thead><tr><th>Comisión</th><th>Integrantes</th><th>Descripción</th><th>Estatus</th></tr></thead><tbody>';min.comisiones.forEach(function(c){var ints=(c.integrantes||[]).map(function(id){return nameById(id);}).join(', ');tabCom+='<tr><td style="font-weight:600">'+escH(c.nombre)+'</td><td>'+escH(ints)+'</td><td>'+escH(c.descripcion||'')+'</td><td>'+estatusBadge(c.estatus)+'</td></tr>';});tabCom+='</tbody></table>';}
-  var firmas='';['Presidente','Secretario','Tesorero'].forEach(function(puesto){var n=act.find(function(s){return s.puesto===puesto;});firmas+='<div class="firma-box"><div class="firma-line"><div style="font-weight:700">'+puesto+'</div><div style="color:#666;font-size:.7rem">'+(n?escH(n.nombre):'_________________________')+'</div></div></div>';});
+  var firmas='';['Presidente','Secretario','Tesorero'].forEach(function(puesto){
+    // Buscar en puestos de la mesa de la sesión
+    var socioId=null;
+    if(mesa&&mesa.puestos){
+      var mp=mesa.puestos.find(function(p){return p.puesto===puesto;});
+      if(mp) socioId=mp.socioId;
+    }
+    var n=socioId?S.data.socios.find(function(s){return String(s.id)===String(socioId);}):null;
+    firmas+='<div class="firma-box"><div class="firma-line"><div style="font-weight:700">'+puesto+'</div><div style="color:#666;font-size:.7rem">'+(n?escH(n.nombre):'_________________________')+'</div></div></div>';});
   var sepW='─'.repeat(28);
   var waTxt='🦁 *'+CLUB+'*\n📋 *REPORTE DE SESIÓN*\n'+sepW+'\n';
   waTxt+='📌 *'+(ses.descripcion||'Sesión')+'*\n🗓 '+fmtD(ses.fecha)+'\n';
