@@ -1509,7 +1509,10 @@ function pgCumpleanos(el){
         <div style="color:#5580BB;font-size:.75rem">${esc(s.puesto)}</div>
         <div style="color:${col};font-size:.76rem;font-weight:600;margin-top:.15rem">${fmtBD(s.fechaNacimiento)} · ${hoy?`¡Hoy cumple ${edad} años! 🎉`:d===1?`¡Mañana cumple ${edad}!`:`En ${d} días cumple ${edad} años`}</div>
       </div>
-      <button class="btn btn-wa" style="font-size:.78rem;flex-shrink:0" onclick="waFelicitar(${s.id})">💬 ${hoy?'¡Felicitar!':'Compartir'}</button>
+      <div style="display:flex;flex-direction:column;gap:.3rem;flex-shrink:0">
+        <button class="btn btn-wa" style="font-size:.78rem" onclick="waFelicitar(${s.id})">💬 ${hoy?'¡Felicitar!':'Compartir'}</button>
+        ${(S.sesion&&(S.sesion.rol==='admin'||S.sesion.rol==='editor'))?`<button style="background:linear-gradient(135deg,#003DA5,#001a5e);border:1px solid #FFD700;border-radius:6px;padding:.25rem .5rem;cursor:pointer;color:#FFD700;font-size:.72rem" onclick="_cartCumple(${s.id})">🎨 Cartel</button>`:''}
+      </div>
     </div>`;
   };
 
@@ -5155,7 +5158,9 @@ function pgAniversarios(el){
       h+='<div style="color:#5580BB;font-size:.68rem">📅 '+escH2(s.fechaAniv)+'</div>';
       h+='</div>';
       // Botón cartel
+      if(S.sesion&&(S.sesion.rol==='admin'||S.sesion.rol==='editor')){
       h+='<button onclick="_cartAniversario('+s.id+')" style="background:linear-gradient(135deg,#003DA5,#001a5e);border:1px solid #FFD700;border-radius:8px;padding:.45rem .6rem;cursor:pointer;color:#FFD700;font-size:.75rem;white-space:nowrap">🎨 Cartel</button>';
+    }
       h+='</div>';
     });
   }
@@ -5323,42 +5328,43 @@ function _saveAnivImg(){
 }
 
 function _waAnivImg(){
-  // Si no hay imagen guardada, generarla primero
   function shareImg(dataUrl){
-    _showToast('⏳ Preparando para WA...');
     fetch(dataUrl).then(function(r){return r.blob();}).then(function(blob){
       var file=new File([blob],'Aniversario.jpg',{type:'image/jpeg'});
       if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-        navigator.share({files:[file],title:'Aniversario Leonístico'}).catch(function(){
-          // Fallback: descargar + abrir WA
+        navigator.share({files:[file],title:'Aniversario Leonistico'}).catch(function(){
           var link=document.createElement('a');link.download='Aniversario.jpg';link.href=dataUrl;link.click();
-          setTimeout(function(){window.open('https://wa.me/?text='+encodeURIComponent('🎖️ Aniversario Leonístico — '+(window._anivNombre||'')+' — '+(window._anivAnios||'')+' años en el club. ¡Felicidades! 🦁'));},800);
+          setTimeout(function(){window.open('https://wa.me/?text='+encodeURIComponent('🎖️ Aniversario Leonístico — '+(window._anivNombre||'')+' — '+(window._anivAnios||'')+' años en el club. ¡Felicidades! 🦁 Nosotros Servimos'));},800);
         });
       } else {
         var link=document.createElement('a');link.download='Aniversario.jpg';link.href=dataUrl;link.click();
-        setTimeout(function(){window.open('https://wa.me/?text='+encodeURIComponent('🎖️ Aniversario Leonístico — '+(window._anivNombre||'')+' — '+(window._anivAnios||'')+' años en el club. ¡Felicidades! 🦁'));},800);
+        setTimeout(function(){window.open('https://wa.me/?text='+encodeURIComponent('🎖️ Aniversario Leonístico — '+(window._anivNombre||'')+' — '+(window._anivAnios||'')+' años en el club. ¡Felicidades! 🦁 Nosotros Servimos'));},800);
       }
     }).catch(function(){_showToast('Error al compartir');});
   }
-  if(window._anivDataUrl){
-    shareImg(window._anivDataUrl);
-  } else {
-    // Generar imagen primero
-    var card=document.getElementById('aniv-card');
-    if(!card){_showToast('Primero guarda la imagen');return;}
-    var btns=card.querySelector('.aniv-btns');
-    if(btns) btns.style.display='none';
-    _showToast('⏳ Generando...');
-    function run(){
-      html2canvas(card,{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#001038',logging:false,scrollX:0,scrollY:0}).then(function(canvas){
-        if(btns) btns.style.display='flex';
-        window._anivDataUrl=canvas.toDataURL('image/jpeg',0.96);
-        shareImg(window._anivDataUrl);
-      }).catch(function(e){if(btns) btns.style.display='flex';_showToast('Error: '+e.message);});
-    }
-    if(typeof html2canvas!=='undefined') run();
-    else{var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';sc.onload=run;document.head.appendChild(sc);}
+  // Siempre capturar imagen fresca
+  var card=document.getElementById('aniv-card');
+  if(!card){_showToast('No se encontró el cartel');return;}
+  var btns=card.querySelector('.aniv-btns');
+  if(btns) btns.style.display='none';
+  _showToast('⏳ Preparando imagen para WA...');
+  var overlay=document.getElementById('print-overlay');
+  var origOv=overlay?overlay.style.overflow:'';
+  if(overlay) overlay.style.overflow='visible';
+  function run(){
+    html2canvas(card,{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#001038',logging:false,scrollX:0,scrollY:0,width:card.offsetWidth,height:card.offsetHeight}).then(function(canvas){
+      if(btns) btns.style.display='flex';
+      if(overlay) overlay.style.overflow=origOv;
+      window._anivDataUrl=canvas.toDataURL('image/jpeg',0.96);
+      shareImg(window._anivDataUrl);
+    }).catch(function(e){
+      if(btns) btns.style.display='flex';
+      if(overlay) overlay.style.overflow=origOv;
+      _showToast('Error: '+e.message);
+    });
   }
+  if(typeof html2canvas!=='undefined'){setTimeout(run,200);}
+  else{var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';sc.onload=function(){setTimeout(run,200);};document.head.appendChild(sc);}
 }
 
 function _saveAnivImg(){
@@ -5439,6 +5445,164 @@ function _waAniv(btn){
     +'¡Gracias por tu dedicación y lealtad!\n\n'
     +'_We Serve 🦁_';
   window.open('https://wa.me/?text='+encodeURIComponent(txt));
+}
+
+
+function _cartCumple(socioId){
+  var s=S.data.socios.find(function(x){return String(x.id)===String(socioId);});
+  if(!s){_showToast('Socio no encontrado');return;}
+  var fn=s.fechaNacimiento||'';
+  var parts=fn.split('-');
+  var meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var fechaCump=parts.length>=3?(parseInt(parts[2])+' de '+(meses[parseInt(parts[1])-1]||'')):'';
+  var edad=calcEdad(fn);
+
+  var h='';
+  h+='<div id="cumple-card" style="width:300px;font-family:Arial,sans-serif;background:linear-gradient(165deg,#001a5e 0%,#003DA5 40%,#002080 70%,#001038 100%);border-radius:20px;overflow:hidden;border:2.5px solid #FFD700;box-shadow:0 0 30px rgba(255,215,0,.2);position:relative">';
+
+  // Top bar
+  h+='<div style="height:7px;background:linear-gradient(90deg,#8B6914,#FFD700,#FFA500,#FFD700,#8B6914)"></div>';
+
+  // Globos colores
+  h+='<div style="position:absolute;top:8px;right:8px;display:flex;gap:3px;align-items:flex-end;pointer-events:none">';
+  h+='<div style="width:16px;height:22px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:#f87171;border:1px solid #FFD700"></div>';
+  h+='<div style="width:18px;height:24px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:#FFD700"></div>';
+  h+='<div style="width:15px;height:20px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:#4ade80;margin-top:4px"></div>';
+  h+='</div>';
+
+  // Header logo + club
+  h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px 6px">';
+  h+='<img src="'+LOGO_B64+'" width="72" style="display:block;flex-shrink:0;height:auto"/>';
+  h+='<div>';
+  h+='<div style="color:#FFD700;font-weight:900;font-size:13px;line-height:1.15;text-transform:uppercase">Club de Leones<br/>Navolato A.C</div>';
+  h+='<div style="display:flex;align-items:center;gap:4px;margin-top:3px">';
+  h+='<div style="flex:1;height:1px;background:rgba(255,215,0,.5)"></div>';
+  h+='<span style="color:#FFD700;font-size:9px;letter-spacing:1px">Distrito B9</span>';
+  h+='<div style="flex:1;height:1px;background:rgba(255,215,0,.5)"></div>';
+  h+='</div></div></div>';
+
+  // Tag cumpleaños
+  h+='<div style="text-align:center;margin:0 12px 6px">';
+  h+='<div style="display:inline-block;background:linear-gradient(90deg,#8B6914,#FFD700,#FFA500);color:#001038;font-size:10px;font-weight:700;padding:3px 14px;border-radius:10px;letter-spacing:1.5px">🎂 CUMPLEAÑOS 🎂</div>';
+  h+='</div>';
+
+  // Panel crema
+  h+='<div style="margin:8px 12px 8px;background:linear-gradient(135deg,#f5f0e8,#fff8e8);border-radius:14px;border:1.5px solid rgba(255,215,0,.4);padding:14px 10px 12px;position:relative">';
+  h+='<div style="position:absolute;top:6px;left:12px;font-size:14px;opacity:.6">🎊</div>';
+  h+='<div style="position:absolute;top:6px;right:12px;font-size:14px;opacity:.6">🎊</div>';
+  h+='<div style="text-align:center;font-size:58px;line-height:1;margin:4px 0 0">🎂</div>';
+  h+='<div style="text-align:center;font-family:Georgia,serif;font-size:26px;font-weight:700;font-style:italic;color:#003DA5;text-shadow:1px 1px 3px rgba(0,61,165,.2);margin:4px 0 2px">¡Feliz<br/>Cumpleaños!</div>';
+  h+='<div style="display:flex;align-items:center;gap:6px;margin:6px 0">';
+  h+='<div style="flex:1;height:1px;background:linear-gradient(90deg,transparent,#B87333)"></div>';
+  h+='<div style="font-size:12px">🎈</div>';
+  h+='<div style="flex:1;height:1px;background:linear-gradient(90deg,#B87333,transparent)"></div>';
+  h+='</div>';
+  h+='<div style="text-align:center;color:#003DA5;font-size:10.5px;font-style:italic;line-height:1.6">';
+  h+='"Que este día esté lleno de alegría,<br/>salud y momentos especiales.<br/>¡Te deseamos lo mejor!"';
+  h+='</div></div>';
+
+  // Felicidades dorado
+  h+='<div style="text-align:center;padding:4px 8px 2px;position:relative">';
+  h+='<span style="position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:16px">✨</span>';
+  h+='<span style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:16px">✨</span>';
+  h+='<span style="font-family:Georgia,serif;font-size:20px;font-weight:700;font-style:italic;color:#FFCB00;text-shadow:0 0 10px rgba(255,203,0,.5)">¡Muchas Felicidades!</span>';
+  h+='</div>';
+
+  // Listón nombre
+  h+='<div style="position:relative;margin:4px 0 0">';
+  h+='<div style="background:linear-gradient(90deg,#8B6914,#FFD700 30%,#FFA500 60%,#8B6914);padding:8px 20px;clip-path:polygon(12px 0%,calc(100% - 12px) 0%,100% 50%,calc(100% - 12px) 100%,12px 100%,0% 50%);text-align:center">';
+  h+='<div style="color:#001038;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase">Compañero León</div>';
+  h+='<div style="color:#001038;font-size:14px;font-weight:900;text-transform:uppercase;line-height:1.25;margin-top:2px">'+escH2(s.nombre)+'</div>';
+  h+='</div>';
+  h+='<div style="display:flex;justify-content:space-between">';
+  h+='<div style="width:0;height:0;border-top:8px solid #5C4A1E;border-right:12px solid transparent"></div>';
+  h+='<div style="width:0;height:0;border-top:8px solid #5C4A1E;border-left:12px solid transparent"></div>';
+  h+='</div></div>';
+
+  // Footer
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px 6px">';
+  h+='<div style="color:#88AADD;font-size:10px;line-height:1.5">Cumpleaños<br/><strong style="color:#FFD700">'+escH2(fechaCump)+'</strong></div>';
+  h+='<div style="flex:1;text-align:center;color:#FFD700;font-size:11px;font-style:italic;font-weight:700">"Nosotros<br/>Servimos"</div>';
+  h+='<img src="'+LOGO_B64+'" width="48" style="display:block;height:auto;opacity:.85"/>';
+  h+='</div>';
+
+  // Botones
+  h+='<div class="cumple-btns" style="display:flex;justify-content:center;gap:8px;padding:8px;background:rgba(0,0,0,.2)">';
+  h+='<button onclick="_saveCumpleImg()" style="background:#003DA5;color:#FFD700;border:1px solid #FFD700;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📷 Guardar imagen</button>';
+  h+='<button onclick="_waCumpleImg()" style="background:#25d366;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px">💬 WA</button>';
+  h+='</div>';
+
+  h+='<div style="height:7px;background:linear-gradient(90deg,#8B6914,#FFD700,#FFA500,#FFD700,#8B6914)"></div>';
+  h+='</div>';
+
+  window._cumpleNombre=s.nombre;
+  window._cumpleFecha=fechaCump;
+  window._cumpleDataUrl=null;
+  showPrintOverlay(h,'Cumpleaños — '+s.nombre);
+}
+
+function _saveCumpleImg(){
+  var card=document.getElementById('cumple-card');
+  if(!card){_showToast('No se encontró el cartel');return;}
+  var btns=card.querySelector('.cumple-btns');
+  if(btns) btns.style.display='none';
+  _showToast('⏳ Generando imagen...');
+  var overlay=document.getElementById('print-overlay');
+  var origOv=overlay?overlay.style.overflow:'';
+  if(overlay) overlay.style.overflow='visible';
+  function run(){
+    html2canvas(card,{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#001038',logging:false,scrollX:0,scrollY:0,width:card.offsetWidth,height:card.offsetHeight}).then(function(canvas){
+      if(btns) btns.style.display='flex';
+      if(overlay) overlay.style.overflow=origOv;
+      window._cumpleDataUrl=canvas.toDataURL('image/jpeg',0.96);
+      var link=document.createElement('a');
+      link.download='Cumpleanos_'+new Date().toISOString().slice(0,10)+'.jpg';
+      link.href=window._cumpleDataUrl;link.click();
+      _showToast('✅ Imagen guardada');
+    }).catch(function(e){if(btns) btns.style.display='flex';if(overlay) overlay.style.overflow=origOv;_showToast('Error: '+e.message);});
+  }
+  if(typeof html2canvas!=='undefined'){setTimeout(function(){run();},200);}
+  else{var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';sc.onload=function(){setTimeout(run,200);};document.head.appendChild(sc);}
+}
+
+function _waCumpleImg(){
+  function share(dataUrl){
+    fetch(dataUrl).then(function(r){return r.blob();}).then(function(blob){
+      var file=new File([blob],'Cumpleanos.jpg',{type:'image/jpeg'});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        navigator.share({files:[file],title:'Feliz Cumpleanos'}).catch(function(){
+          var link=document.createElement('a');link.download='Cumpleanos.jpg';link.href=dataUrl;link.click();
+          setTimeout(function(){window.open('https://wa.me/?text='+encodeURIComponent('🎂 ¡Feliz Cumpleaños! — '+(window._cumpleNombre||'')+'. ¡Que pases un excelente día! 🦁 Nosotros Servimos'));},800);
+        });
+      } else {
+        var link=document.createElement('a');link.download='Cumpleanos.jpg';link.href=dataUrl;link.click();
+        setTimeout(function(){window.open('https://wa.me/?text='+encodeURIComponent('🎂 ¡Feliz Cumpleaños! — '+(window._cumpleNombre||'')+'. ¡Que pases un excelente día! 🦁 Nosotros Servimos'));},800);
+      }
+    }).catch(function(){_showToast('Error al compartir');});
+  }
+  // Siempre capturar imagen fresca antes de compartir
+  var card=document.getElementById('cumple-card');
+  if(!card){_showToast('No se encontró el cartel');return;}
+  var btns=card.querySelector('.cumple-btns');
+  if(btns) btns.style.display='none';
+  _showToast('⏳ Preparando imagen para WA...');
+  var overlay=document.getElementById('print-overlay');
+  var origOv=overlay?overlay.style.overflow:'';
+  if(overlay) overlay.style.overflow='visible';
+  function run(){
+    html2canvas(card,{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#001038',logging:false,scrollX:0,scrollY:0,width:card.offsetWidth,height:card.offsetHeight}).then(function(canvas){
+      if(btns) btns.style.display='flex';
+      if(overlay) overlay.style.overflow=origOv;
+      window._cumpleDataUrl=canvas.toDataURL('image/jpeg',0.96);
+      share(window._cumpleDataUrl);
+    }).catch(function(e){
+      if(btns) btns.style.display='flex';
+      if(overlay) overlay.style.overflow=origOv;
+      _showToast('Error: '+e.message);
+    });
+  }
+  if(typeof html2canvas!=='undefined'){setTimeout(run,200);}
+  else{var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';sc.onload=function(){setTimeout(run,200);};document.head.appendChild(sc);}
 }
 
 // ── Arranque ──────────────────────────────────────────────────
