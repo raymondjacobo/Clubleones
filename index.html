@@ -5104,7 +5104,10 @@ function pgAniversarios(el){
     if(fi.getMonth()>new Date().getMonth()||(fi.getMonth()===new Date().getMonth()&&fi.getDate()>new Date().getDate())){
       anios--;
     }
-    return Object.assign({},s,{aniosEnClub:anios});
+    var diaAniv=fi.getDate();
+    var meses2=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    var fechaAniv=diaAniv+' '+meses2[fi.getMonth()];
+    return Object.assign({},s,{aniosEnClub:anios,fechaAniv:fechaAniv});
   }).sort(function(a,b){return b.aniosEnClub-a.aniosEnClub;});
 
   var h='';
@@ -5149,6 +5152,7 @@ function pgAniversarios(el){
       h+='<div style="color:#E8F0FF;font-weight:700;font-size:.88rem">'+escH(s.nombre)+'</div>';
       h+='<div style="color:#5580BB;font-size:.72rem">'+escH(s.puesto||'Socio')+'</div>';
       h+='<div style="color:#FFD700;font-size:.72rem;margin-top:.15rem">'+medalla+' '+s.aniosEnClub+' año'+(s.aniosEnClub!==1?'s':'')+'  en el club</div>';
+      h+='<div style="color:#5580BB;font-size:.68rem">📅 '+escH2(s.fechaAniv)+'</div>';
       h+='</div>';
       // Botón cartel
       h+='<button onclick="_cartAniversario('+s.id+')" style="background:linear-gradient(135deg,#003DA5,#001a5e);border:1px solid #FFD700;border-radius:8px;padding:.45rem .6rem;cursor:pointer;color:#FFD700;font-size:.75rem;white-space:nowrap">🎨 Cartel</button>';
