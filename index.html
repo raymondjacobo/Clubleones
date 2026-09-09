@@ -547,12 +547,37 @@ const isMes    = fn => { if(!fn)return false; const v=_normDate(fn); const n=new
 const _normDate = function(d){
   if(!d) return '';
   var v=String(d).trim();
+  // YYYY-MM-DD
   if(v.match(/^[0-9]{4}-[0-9]{2}-[0-9]{2}/)) return v.substring(0,10);
+  // DD/MM/YYYY o MM/DD/YYYY — distinguir por rango válido
+  var mx=v.match(/^([0-9]{1,2})\/([0-9]{1,2})\/([0-9]{4})/);
+  if(mx){
+    var p1=parseInt(mx[1]),p2=parseInt(mx[2]),yr=parseInt(mx[3]);
+    // Si primer parte >12 forzosamente es día → DD/MM/YYYY
+    if(p1>12){
+      return yr+'-'+String(p2).padStart(2,'0')+'-'+String(p1).padStart(2,'0');
+    }
+    // Si segundo parte >12 forzosamente es día → MM/DD/YYYY
+    if(p2>12){
+      return yr+'-'+String(p1).padStart(2,'0')+'-'+String(p2).padStart(2,'0');
+    }
+    // Ambos <=12: asumir DD/MM/YYYY (formato mexicano)
+    return yr+'-'+String(p2).padStart(2,'0')+'-'+String(p1).padStart(2,'0');
+  }
+  // Formato Sheets serial number (número entero como "44927")
+  var serial=parseInt(v);
+  if(!isNaN(serial)&&serial>30000&&serial<60000){
+    var dt2=new Date(Date.UTC(1899,11,30)+serial*86400000);
+    if(!isNaN(dt2.getTime())){
+      return dt2.getUTCFullYear()+'-'+String(dt2.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt2.getUTCDate()).padStart(2,'0');
+    }
+  }
+  // Fallback: intentar parsear con Date
   var dt=new Date(v);
-  if(!isNaN(dt.getTime())){
+  if(!isNaN(dt.getTime())&&dt.getFullYear()>1900){
     return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   }
-  return v.substring(0,10);
+  return '';
 };
 const fmtBD    = fn => { if(!fn)return ''; const v=_normDate(fn); const n=new Date(v+'T12:00:00'); if(isNaN(n.getTime()))return ''; return n.toLocaleDateString('es-MX',{day:'2-digit',month:'long'}); };
 
@@ -3753,7 +3778,7 @@ function pgCredencial(el){
     var norm=_normDate(String(fi));
     if(norm&&norm.length>=7){
       var di=new Date(norm+'T12:00:00');
-      if(!isNaN(di.getTime())&&di.getFullYear()>1990&&di.getFullYear()<2099){
+      if(!isNaN(di.getTime())&&di.getFullYear()>1900&&di.getFullYear()<2099){
         ingresoStr=di.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
       }
     }
@@ -4672,7 +4697,7 @@ function reporteDirectorioSocios(){
       var norm=_normDate(String(s.fechaIngreso));
       if(norm){
         var di=new Date(norm+'T12:00:00');
-        if(!isNaN(di.getTime())&&di.getFullYear()>1990){
+        if(!isNaN(di.getTime())&&di.getFullYear()>1900){
           ingresoStr=di.toLocaleDateString('es-MX',{month:'short',year:'numeric'});
         }
       }
