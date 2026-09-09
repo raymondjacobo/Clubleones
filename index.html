@@ -1536,8 +1536,7 @@ function pgCumpleanos(el){
         <div style="color:${col};font-size:.76rem;font-weight:600;margin-top:.15rem">${fmtBD(s.fechaNacimiento)} · ${hoy?`¡Hoy cumple ${edad} años! 🎉`:d===1?`¡Mañana cumple ${edad}!`:`En ${d} días cumple ${edad} años`}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:.3rem;flex-shrink:0">
-        <button class="btn btn-wa" style="font-size:.78rem" onclick="waFelicitar(${s.id})">💬 ${hoy?'¡Felicitar!':'Compartir'}</button>
-        ${(S.sesion&&(S.sesion.rol==='admin'||S.sesion.rol==='editor'))?`<button style="background:linear-gradient(135deg,#003DA5,#001a5e);border:1px solid #FFD700;border-radius:6px;padding:.25rem .5rem;cursor:pointer;color:#FFD700;font-size:.72rem" onclick="_cartCumple(${s.id})">🎨 Cartel</button>`:''}
+        ${(S.sesion&&(S.sesion.rol==='admin'||S.sesion.rol==='editor'))?`<button style="background:linear-gradient(135deg,#003DA5,#001a5e);border:1px solid #FFD700;border-radius:6px;padding:.4rem .7rem;cursor:pointer;color:#FFD700;font-size:.75rem" onclick="_cartCumple(${s.id})">🎨 Cartel</button>`:''}
       </div>
     </div>`;
   };
@@ -5128,7 +5127,7 @@ function pgAniversarios(el){
   var mesActual=String(hoy.getMonth()+1).padStart(2,'0');
   var diaActual=String(hoy.getDate()).padStart(2,'0');
   var mesStr=el._mes||mesActual;
-  var diaStr=el._dia||diaActual;
+  var diaStr=el._dia||'00';
   var anioHoy=hoy.getFullYear();
 
   var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
