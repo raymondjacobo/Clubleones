@@ -3761,13 +3761,18 @@ function pgCredencial(el){
   var presNombre='—';
   if(mesa&&mesa.puestos){
     var pp=mesa.puestos.find(function(p){
-      return (p.puesto||'').toLowerCase().indexOf('president')>=0;
+      var pu=(p.puesto||'').toLowerCase().trim();
+      return pu==='presidente'||pu==='president';
     });
-    if(pp) presNombre=pp.nombre||'—';
+    if(pp&&pp.socioId){
+      var pSocio=S.data.socios.find(function(s){return String(s.id)===String(pp.socioId);});
+      if(pSocio) presNombre=pSocio.nombre;
+    }
   }
   if(presNombre==='—'){
     var sp=S.data.socios.find(function(s){
-      return s.activo&&(s.puesto||'').toLowerCase().indexOf('president')>=0;
+      var pu=(s.puesto||'').toLowerCase().trim();
+      return s.activo&&(pu==='presidente'||pu==='president');
     });
     if(sp) presNombre=sp.nombre;
   }
