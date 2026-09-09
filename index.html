@@ -178,6 +178,7 @@ const MODULOS = [
   {id:'reportes',   label:'Reportes',    ico:'📊'},
   {id:'minutas',    label:'Minutas',     ico:'📝'},
   {id:'acuerdos',   label:'Acuerdos',    ico:'📌'},
+  {id:'parametros',  label:'Parámetros',  ico:'⚙️'},
   {id:'aniversarios', label:'Aniversarios', ico:'🎖️'},
   {id:'mesas',      label:'Mesas Direct.',ico:'🏛️'},
   {id:'permisos',   label:'Permisos',    ico:'🔐'},
@@ -828,8 +829,8 @@ function renderApp(){
   // Recomputar permisos frescos en cada render
   const perms=(S.data.permisos||PERM_DEF)[S.sesion.rol]||PERM_DEF[S.sesion.rol]||['dashboard'];
   S.sesion.modulos=perms;
-  const nav=MODULOS.filter(m=>perms.includes(m.id)||m.id==='credencial'||m.id==='etica'||m.id==='juramento'||m.id==='causas'||m.id==='acuerdos'||m.id==='aniversarios');
-  const cur=(perms.includes(S.page)||S.page==='credencial'||S.page==='etica'||S.page==='juramento'||S.page==='causas'||S.page==='acuerdos'||S.page==='aniversarios')?S.page:'dashboard';
+  const nav=MODULOS.filter(m=>perms.includes(m.id)||m.id==='credencial'||m.id==='etica'||m.id==='juramento'||m.id==='causas'||m.id==='acuerdos'||m.id==='aniversarios'||(m.id==='parametros'&&S.sesion&&S.sesion.rol==='admin'));
+  const cur=(perms.includes(S.page)||S.page==='credencial'||S.page==='etica'||S.page==='juramento'||S.page==='causas'||S.page==='acuerdos'||S.page==='aniversarios'||S.page==='parametros')?S.page:'dashboard';
 
   // Badges
   const activos=S.data.socios.filter(s=>s.activo);
@@ -963,7 +964,7 @@ function renderPage(page){
   if(!S.sesion||!S.sesion.rol||!S.sesion.nombre){S.sesion=null;renderLogin();return;}
   const el=document.getElementById('page-content');
   if(!el)return;
-  const pages={dashboard:pgDashboard,socios:pgSocios,asistencia:pgAsistencia,pagos:pgPagos,ingresos:pgIngresos,gastos:pgGastos,agenda:pgAgenda,cumpleanos:pgCumpleanos,catalogos:pgCatalogos,reportes:pgReportes,minutas:pgMinutas,acuerdos:pgAcuerdos,aniversarios:pgAniversarios,mesas:pgMesas,permisos:pgPermisos,credencial:pgCredencial,etica:pgEtica,juramento:pgJuramento,causas:pgCausas};
+  const pages={dashboard:pgDashboard,socios:pgSocios,asistencia:pgAsistencia,pagos:pgPagos,ingresos:pgIngresos,gastos:pgGastos,agenda:pgAgenda,cumpleanos:pgCumpleanos,catalogos:pgCatalogos,reportes:pgReportes,minutas:pgMinutas,acuerdos:pgAcuerdos,aniversarios:pgAniversarios,parametros:pgParametros,mesas:pgMesas,permisos:pgPermisos,credencial:pgCredencial,etica:pgEtica,juramento:pgJuramento,causas:pgCausas};
   try{
     (pages[page]||pgDashboard)(el);
   }catch(err){
@@ -5628,6 +5629,70 @@ function _waCumpleImg(){
   }
   if(typeof html2canvas!=='undefined'){setTimeout(run,200);}
   else{var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';sc.onload=function(){setTimeout(run,200);};document.head.appendChild(sc);}
+}
+
+
+function pgParametros(el){
+  if(!S.sesion||S.sesion.rol!=='admin'){
+    el.innerHTML='<p class="empty">Acceso restringido</p>';return;
+  }
+  var mesa=getActiveMesa();
+  var h='';
+
+  h+='<div style="background:#001a50;border-radius:10px;padding:.85rem 1rem;border:1px solid #003080;margin-bottom:.75rem">';
+  h+='<div style="color:#FFD700;font-size:.72rem;text-transform:uppercase;font-weight:700;letter-spacing:.06em">⚙️ Parámetros de la Aplicación</div>';
+  h+='<div style="color:#5580BB;font-size:.7rem;margin-top:.1rem">Solo visible para administradores</div>';
+  h+='</div>';
+
+  // App info
+  function card(titulo, items){
+    var c='<div style="background:#001038;border-radius:12px;border:1px solid #003080;padding:.85rem 1rem;margin-bottom:.6rem">';
+    c+='<div style="color:#60a5fa;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">'+titulo+'</div>';
+    items.forEach(function(item){
+      c+='<div style="display:flex;flex-direction:column;gap:.1rem;margin-bottom:.5rem;padding-bottom:.5rem;border-bottom:1px solid rgba(255,255,255,.06)">';
+      c+='<div style="color:#5580BB;font-size:.68rem">'+item.label+'</div>';
+      c+='<div style="color:#E8F0FF;font-size:.78rem;word-break:break-all">'+escH2(item.valor)+'</div>';
+      c+='</div>';
+    });
+    c+='</div>';
+    return c;
+  }
+
+  h+=card('🦁 Información del Club',[
+    {label:'Nombre del Club',    valor:CLUB},
+    {label:'Distrito',           valor:DISTRITO},
+    {label:'Mesa Directiva Activa', valor:mesa?mesa.nombre:'Sin mesa activa'},
+    {label:'Socios activos',     valor:(S.data.socios||[]).filter(function(s){return s.activo;}).length+' socios'},
+  ]);
+
+  h+=card('🔧 Configuración del Backend',[
+    {label:'URL del Apps Script', valor:APPS_URL},
+    {label:'ID del Spreadsheet (Google Sheets)', valor:'18IpGIIHwSYKQiJsoHNbMyj1gmVC8Iu6VG9tHYJx3dpo'},
+    {label:'Cuenta del backend',  valor:'club.leones.navolatodb9@gmail.com'},
+    {label:'Versión del backend', valor:'2.0'},
+  ]);
+
+  h+=card('📱 Información de la App',[
+    {label:'Versión de la app',   valor:'v1.7.0'},
+    {label:'Repositorio GitHub',  valor:'https://raymondjacobo.github.io/Clubleones/'},
+    {label:'Última actualización',valor:new Date().toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})},
+  ]);
+
+  h+=card('📊 Estadísticas',[
+    {label:'Total socios',        valor:(S.data.socios||[]).length+' registrados'},
+    {label:'Sesiones registradas',valor:(S.data.sesiones||[]).length+' sesiones'},
+    {label:'Pagos registrados',   valor:(S.data.pagos||[]).length+' pagos'},
+    {label:'Minutas',             valor:(S.data.minutas||[]).length+' minutas'},
+    {label:'Mesas directivas',    valor:(S.data.mesasDirectivas||[]).length+' mesas'},
+  ]);
+
+  // Aviso de seguridad
+  h+='<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:.75rem 1rem;margin-top:.5rem">';
+  h+='<div style="color:#f87171;font-size:.72rem;font-weight:700;margin-bottom:.25rem">⚠️ Información Confidencial</div>';
+  h+='<div style="color:rgba(248,113,113,.8);font-size:.68rem;line-height:1.5">Esta sección contiene datos sensibles de configuración. No comparta esta información con personas no autorizadas.</div>';
+  h+='</div>';
+
+  el.innerHTML=h;
 }
 
 // ── Arranque ──────────────────────────────────────────────────
