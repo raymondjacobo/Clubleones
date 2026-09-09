@@ -3903,7 +3903,40 @@ function pgCredencial(el){
 
 
 function _printCred(){ showPrintOverlay(window._credHTML||'','Mi Credencial',window._credWA||''); }
-function _waCred(){ if(window._credWA) window.open('https://wa.me/?text='+encodeURIComponent(window._credWA)); }
+function _waCred(){
+  var card=document.getElementById('cred-card');
+  if(!card){_showToast('No se encontró la credencial');return;}
+  var btns=card.querySelector('.cred-action-btns');
+  if(btns) btns.style.display='none';
+  _showToast('⏳ Preparando imagen para WA...');
+  var overlay=document.getElementById('print-overlay');
+  var origOv=overlay?overlay.style.overflow:'';
+  if(overlay) overlay.style.overflow='visible';
+  function run(){
+    html2canvas(card,{scale:2,useCORS:true,allowTaint:true,backgroundColor:null,logging:false,scrollX:0,scrollY:0,width:card.offsetWidth,height:card.offsetHeight}).then(function(canvas){
+      if(btns) btns.style.display='flex';
+      if(overlay) overlay.style.overflow=origOv;
+      canvas.toBlob(function(blob){
+        var file=new File([blob],'Credencial.jpg',{type:'image/jpeg'});
+        if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+          navigator.share({files:[file],title:'Credencial Club de Leones'}).catch(function(){
+            var link=document.createElement('a');link.download='Credencial.jpg';link.href=canvas.toDataURL('image/jpeg',0.96);link.click();
+            if(window._credWA) setTimeout(function(){window.open('https://wa.me/?text='+encodeURIComponent(window._credWA));},800);
+          });
+        } else {
+          var link=document.createElement('a');link.download='Credencial.jpg';link.href=canvas.toDataURL('image/jpeg',0.96);link.click();
+          if(window._credWA) setTimeout(function(){window.open('https://wa.me/?text='+encodeURIComponent(window._credWA));},800);
+        }
+      },'image/jpeg',0.96);
+    }).catch(function(e){
+      if(btns) btns.style.display='flex';
+      if(overlay) overlay.style.overflow=origOv;
+      _showToast('Error: '+e.message);
+    });
+  }
+  if(typeof html2canvas!=='undefined'){setTimeout(run,200);}
+  else{var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';sc.onload=function(){setTimeout(run,200);};document.head.appendChild(sc);}
+}
 
 
 // ════════════════════════════════════════════════════════════════
