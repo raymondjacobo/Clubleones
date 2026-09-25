@@ -4022,10 +4022,13 @@ function _generarInformeGestion(mesa){
   var evTipos={};
   eventos.forEach(function(e){evTipos[e.tipo||'Sin tipo']=(evTipos[e.tipo||'Sin tipo']||0)+1;});
 
-  // Presidente(a)
+  // Presidente(a) — coincidencia exacta (evita confundir con "Vicepresidente")
   var presNombre='—';
   if(mesa.puestos){
-    var pp=mesa.puestos.find(function(p){return (p.puesto||'').toLowerCase().indexOf('president')>=0;});
+    var pp=mesa.puestos.find(function(p){
+      var pu=(p.puesto||'').toLowerCase().trim();
+      return pu==='presidente'||pu==='president';
+    });
     if(pp){
       if(pp.nombre) presNombre=pp.nombre;
       else if(pp.socioId){
@@ -4036,7 +4039,10 @@ function _generarInformeGestion(mesa){
   }
   // Fallback: buscar en socios activos
   if(presNombre==='—'){
-    var spFb=S.data.socios.find(function(s){return s.activo&&(s.puesto||'').toLowerCase().indexOf('president')>=0;});
+    var spFb=S.data.socios.find(function(s){
+      var pu=(s.puesto||'').toLowerCase().trim();
+      return s.activo&&(pu==='presidente'||pu==='president');
+    });
     if(spFb) presNombre=spFb.nombre;
   }
 
