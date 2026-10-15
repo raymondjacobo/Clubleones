@@ -733,6 +733,7 @@ async function doLogin(){
             }
           });
         }
+          S_base=_snapshot();
         }
       }catch(e){ /* continuar */ }
 
@@ -890,7 +891,7 @@ function renderApp(){
       </nav>
       <div class="sb-bottom">
         ${perms.includes('ingresos')?`<button class="btn btn-ghost" onclick="exportCSV()" style="width:100%;font-size:.74rem;color:#FFD700;background:rgba(255,215,0,.12);border-color:rgba(255,215,0,.28)">⬇️ Exportar mes CSV</button>`:''}
-        ${APPS_SCRIPT_CONFIGURED?'<button class="data-lock-btn" onclick="sincronizarTodo(true)" id="btn-sync">☁️ Sincronizar</button>':'<button class="data-lock-btn" onclick="guardarArchivoatos()" id="btn-save-data">💾 Guardar datos</button>'}
+        ${APPS_SCRIPT_CONFIGURED?'<button class="data-lock-btn" onclick="actualizarDesdeSheets()" id="btn-sync">⬇️ Actualizar</button>':'<button class="data-lock-btn" onclick="guardarArchivoatos()" id="btn-save-data">💾 Guardar datos</button>'}
         <button class="btn btn-ghost" onclick="doLogout()" style="width:100%;font-size:.74rem;color:#f87171;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.25)">🚪 Cerrar sesión</button>
       </div>
       ${isDemoMode()?'<div style="padding:.5rem;background:rgba(255,215,0,.06);border-top:1px solid rgba(255,215,0,.15);text-align:center"><span style="color:#FFD700;font-size:.58rem">⚠ Modo Demo</span></div>':''}
@@ -3492,38 +3493,106 @@ function _fechaMes(fecha, mesId){
 }
 
 
-// ── Sync helpers ──────────────────────────────────────────────────
-function _autoSync(){
-  if(typeof APPS_SCRIPT_CONFIGURED==='undefined'||!APPS_SCRIPT_CONFIGURED) return;
-  clearTimeout(window._syncTimeout);
-  window._syncTimeout=setTimeout(function(){ sincronizarTodo(false); }, 1500);
+// ── Sync v2: la sincronización SOLO DESCARGA ─────────────────────
+// La subida ocurre únicamente cuando se pulsa un botón de guardar/borrar
+// (ellos llaman _autoSync → _guardarCambios). Se sube SOLO lo que cambió
+// (registros nuevos/editados y borrados explícitos), nunca tablas completas.
+var SYNC_TABLAS=['socios','sesiones','pagos','ingresos','gastos','eventos','minutas','mesasDirectivas'];
+var SYNC_CFG=['catIngresos','catGastos','catPuestos','catTiposEvento','catMetodosPago','permisos'];
+var S_base=null;            // foto de lo último descargado/subido (null = aún no se descargó)
+var S_subiendo=false, S_reintento=false;
+
+function _snapshot(){
+  var b={t:{},c:{}};
+  SYNC_TABLAS.forEach(function(t){
+    b.t[t]={};
+    (S.data[t]||[]).forEach(function(it){
+      if(it&&it.id!==undefined&&it.id!==null) b.t[t][String(it.id)]=JSON.stringify(it);
+    });
+  });
+  SYNC_CFG.forEach(function(k){ b.c[k]=JSON.stringify(S.data[k]===undefined?null:S.data[k]); });
+  return b;
 }
-async function sincronizarTodo(mostrarMsg){
+function _calcCambios(){
+  if(!S_base) return null;
+  var out={cambios:{},config:{},n:0,borrados:0,fotos:[]};
+  SYNC_TABLAS.forEach(function(t){
+    var base=S_base.t[t]||{}, vistos={}, up=[], rem=[];
+    (S.data[t]||[]).forEach(function(it){
+      if(!it||it.id===undefined||it.id===null) return;
+      var id=String(it.id), j=JSON.stringify(it); vistos[id]=1;
+      if(base[id]!==j){ up.push(JSON.parse(j)); out.fotos.push([t,id,j]); }
+    });
+    Object.keys(base).forEach(function(id){ if(!vistos[id]) rem.push(id); });
+    if(up.length||rem.length){
+      out.cambios[t]={upsert:up,remove:rem};
+      out.n+=up.length+rem.length; out.borrados+=rem.length;
+    }
+  });
+  SYNC_CFG.forEach(function(k){
+    if(S.data[k]===undefined) return;
+    var j=JSON.stringify(S.data[k]);
+    if(j!==S_base.c[k]){ out.config[k]=JSON.parse(j); out.n++; out.fotos.push(['__c',k,j]); }
+  });
+  return out;
+}
+async function _guardarCambios(){
+  if(typeof APPS_SCRIPT_CONFIGURED==='undefined'||!APPS_SCRIPT_CONFIGURED) return;
+  if(!S_base){ _showToast('⚠️ No se guardó en Sheets: primero descarga los datos (botón ⬇️ Actualizar)'); return; }
+  if(S_subiendo){ S_reintento=true; return; }
+  var d=_calcCambios();
+  if(!d||!d.n) return;
+  var forzar=false;
+  if(d.borrados>3){
+    if(!confirm('Vas a borrar '+d.borrados+' registros del Sheet.\n\n¿Confirmas?')) return;
+    forzar=true;
+  }
+  S_subiendo=true;
+  try{
+    var r=await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'guardarCambios',cambios:d.cambios,config:d.config,forzar:forzar})});
+    var res=await r.json();
+    if(res.success){
+      d.fotos.forEach(function(f){ if(f[0]==='__c') S_base.c[f[1]]=f[2]; else S_base.t[f[0]][f[1]]=f[2]; });
+      Object.keys(d.cambios).forEach(function(t){ (d.cambios[t].remove||[]).forEach(function(id){ delete S_base.t[t][id]; }); });
+      S_dataDirty=false;
+      _showToast('✅ Guardado en Sheets');
+    } else _showToast('⚠️ No se guardó: '+(res.error||'error desconocido'));
+  }catch(e){ _showToast('⚠️ Sin conexión: el cambio sigue en pantalla pero NO se ha guardado'); }
+  finally{ S_subiendo=false; if(S_reintento){ S_reintento=false; _guardarCambios(); } }
+}
+// Compatibilidad: todo lo que antes disparaba la subida total ahora sube solo el cambio
+function _autoSync(){ _guardarCambios(); }
+function sincronizarTodo(){ return _guardarCambios(); }
+
+// ⬇️ ACTUALIZAR: solo descarga. No sube nada.
+async function actualizarDesdeSheets(){
   if(typeof APPS_SCRIPT_CONFIGURED==='undefined'||!APPS_SCRIPT_CONFIGURED) return;
   var btn=document.getElementById('btn-sync');
+  var d=_calcCambios();
+  if(d&&d.n>0&&!confirm('Hay '+d.n+' cambio(s) que NO se han guardado en Sheets y se perderán al actualizar.\n\n¿Descartarlos y actualizar?')) return;
   if(btn){btn.textContent='⏳';btn.disabled=true;}
   try{
-    var payload={
-      action:'syncAll',
-      socios:S.data.socios||[], sesiones:S.data.sesiones||[],
-      pagos:S.data.pagos||[], ingresos:S.data.ingresos||[],
-      gastos:S.data.gastos||[], eventos:S.data.eventos||[],
-      minutas:S.data.minutas||[], mesasDirectivas:S.data.mesasDirectivas||[],
-      catIngresos:S.data.catIngresos||[], catGastos:S.data.catGastos||[],
-      catPuestos:S.data.catPuestos||[], catTiposEvento:S.data.catTiposEvento||[],
-      catMetodosPago:S.data.catMetodosPago||[], permisos:S.data.permisos||{}
-    };
-    var r=await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)});
+    var r=await fetch(APPS_URL+'?action=all');
     var res=await r.json();
-    if(res.success){ S_dataDirty=false; if(mostrarMsg!==false) _showToast('✅ Sincronizado'); }
-    else _showToast('⚠️ Error: '+(res.error||'desconocido'));
-  }catch(e){ _showToast('⚠️ Sin conexión'); }
-  finally{ if(btn){btn.textContent='☁️';btn.disabled=false;} }
+    if(!res.success||!res.data||!Array.isArray(res.data.socios)||!res.data.socios.length){
+      _showToast('⚠️ La descarga llegó incompleta; no se cambió nada en pantalla'); return;
+    }
+    try{ localStorage.setItem('lions_backup_pre_actualizar',JSON.stringify({fecha:new Date().toISOString(),data:S.data})); }catch(e){}
+    SYNC_TABLAS.concat(SYNC_CFG).forEach(function(k){ if(res.data[k]!==undefined) S.data[k]=res.data[k]; });
+    (S.data.sesiones||[]).forEach(function(ses){
+      if(ses.asistentes&&ses.asistentes.length) ses.asistentes=[...new Set(ses.asistentes.map(String))];
+    });
+    S_base=_snapshot(); S_dataDirty=false;
+    _showToast('✅ Datos actualizados desde Sheets');
+    try{ navTo(S.page||'dashboard'); }catch(e){}
+  }catch(e){ _showToast('⚠️ Sin conexión: no se pudo actualizar'); }
+  finally{ if(btn){btn.textContent='⬇️ Actualizar';btn.disabled=false;} }
 }
 function _apiSave(action, payload, callback){
   if(typeof callback==='function') callback();
   _markDirty();
-  _autoSync();
+  _guardarCambios();
 }
 
 // ── Print helpers ─────────────────────────────────────────────────
