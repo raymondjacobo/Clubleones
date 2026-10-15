@@ -677,6 +677,7 @@ function renderLogin(){
       </div>
       <div class="login-card" style="margin-top:.5rem">
         <h2 style="color:#E8F0FF;font-size:1rem;margin-bottom:1.5rem;text-align:center;font-weight:600">Iniciar Sesión</h2>
+        <div id="sync-banner" onclick="if(S_pre.estado==='error')_precargar()" style="display:none;text-align:center;font-size:.78rem;font-weight:600;margin:-.8rem 0 1rem"></div>
         <div id="login-error" style="display:none;background:rgba(248,113,113,.18);border:1px solid rgba(248,113,113,.4);border-radius:9px;padding:.75rem 1rem;margin-bottom:1rem;color:#f87171;font-size:.82rem;text-align:center"></div>
         <div class="fld">
           <label>Usuario</label>
@@ -699,6 +700,47 @@ function renderLogin(){
       <p style="color:rgba(255,255,255,.3);font-size:.58rem;text-align:center;margin-top:.25rem">${APP_VERSION} · ${APP_DATE}</p>
     </div>`;
   document.getElementById('inp-user').focus();
+  // Descarga anticipada: mientras escribes usuario y contraseña
+  if(APPS_SCRIPT_CONFIGURED){
+    var _viejo=S_pre.estado==='ok'&&(Date.now()-S_pre.t)>300000;
+    var _pend=_calcCambios();
+    if(_viejo&&!(_pend&&_pend.n>0)) S_pre.estado='idle';
+    if(S_pre.estado==='idle'||S_pre.estado==='error') _precargar(); else _pintarBanner();
+  }
+}
+
+// ── Descarga anticipada de datos (solo descarga, nunca sube) ──────
+var S_pre={estado:'idle',promesa:null,t:0};
+function _pintarBanner(){
+  var el=document.getElementById('sync-banner'); if(!el) return;
+  var m={idle:['',''],cargando:['⏳ Sincronizando datos…','#FFD700'],ok:['✅ Datos al día','#4ade80'],
+         error:['⚠️ No se pudieron descargar los datos. Toca aquí para reintentar','#f87171']}[S_pre.estado]||['',''];
+  el.textContent=m[0]; el.style.color=m[1]; el.style.display=m[0]?'block':'none';
+  el.style.cursor=S_pre.estado==='error'?'pointer':'default';
+}
+function _precargar(){
+  if(!APPS_SCRIPT_CONFIGURED) return Promise.resolve(false);
+  if(S_pre.estado==='cargando'&&S_pre.promesa) return S_pre.promesa;
+  S_pre.estado='cargando'; _pintarBanner();
+  S_pre.promesa=(async function(){
+    var ctl=new AbortController(), tmo=setTimeout(function(){ctl.abort();},60000);
+    try{
+      var dr=await fetch(APPS_URL+'?action=all',{method:'GET',signal:ctl.signal});
+      var dres=await dr.json();
+      if(!(dres&&dres.success&&dres.data&&Array.isArray(dres.data.socios)&&dres.data.socios.length)) throw new Error('incompleto');
+      S.data=Object.assign(S.data,dres.data);
+      if(S.data.sesiones){
+        S.data.sesiones.forEach(function(ses){
+          if(ses.asistentes&&ses.asistentes.length) ses.asistentes=[...new Set(ses.asistentes.map(String))];
+        });
+      }
+      S_base=_snapshot(); S_dataDirty=false;
+      S_pre.estado='ok'; S_pre.t=Date.now();
+      return true;
+    }catch(e){ S_pre.estado='error'; return false; }
+    finally{ clearTimeout(tmo); _pintarBanner(); }
+  })();
+  return S_pre.promesa;
 }
 
 function togglePass(){
@@ -720,22 +762,11 @@ async function doLogin(){
       // ── MODO SHEETS ──────────────────────────────────────────
       // Paso 1: Cargar todos los datos de Sheets primero
       btn.textContent='Conectando...';
-      try{
-        const dr=await fetch(APPS_URL+'?action=all',{method:'GET'});
-        const dres=await dr.json();
-        if(dres.success&&dres.data){
-          S.data=Object.assign(S.data,dres.data);
-        // Deduplicar asistentes al cargar de Sheets
-        if(S.data.sesiones){
-          S.data.sesiones.forEach(function(ses){
-            if(ses.asistentes&&ses.asistentes.length){
-              ses.asistentes=[...new Set(ses.asistentes.map(String))];
-            }
-          });
-        }
-          S_base=_snapshot();
-        }
-      }catch(e){ /* continuar */ }
+      var _okDatos=(S_pre.estado==='ok')||(await _precargar());
+      if(!_okDatos){
+        errEl.textContent='No se pudieron descargar los datos del club. Revisa tu internet e intenta de nuevo.';
+        errEl.style.display='block'; btn.disabled=false; btn.textContent='Entrar →'; return;
+      }
 
       // Paso 2: Verificar si hay admin activo en Sheets
       var _hayAdmin=S.data.socios&&S.data.socios.some(function(s){
